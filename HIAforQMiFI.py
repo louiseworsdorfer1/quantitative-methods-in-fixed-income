@@ -1,46 +1,29 @@
 from pathlib import Path
 import pandas as pd
 import numpy as np
+from sklearn.linear_model import LinearRegression
 
-ROOT = Path(__file__).resolve().parent
-DATA = ROOT / "data"
-CSV = DATA / "LW_monthly_1972-2024.csv"
-EXCEL = DATA / "LW_monthly_1972-2024.xlsx"
+# ROOT = Path(__file__).resolve().parent
+# DATA = ROOT / "data"
+# EXCEL = DATA / "LW_monthly_1972-2024.xlsx"
 
-df = pd.read_excel(EXCEL, sep = ';', decimal=",", skiprows = 1)
-df = df.iloc[:, :122]
+# df = pd.read_excel(EXCEL)
+df = pd.read_excel("LW_monthly_1972-2024.xlsx")
+df = df.iloc[:, 2:122]
 
 def getTimeSeriesMean(j):
     """
     Returns the time series mean for yield j (1 <= j <= 120)
     """
-    # Load the data
-    data = df
-    
     # Ensure j is within valid range
     if j < 1 or j > 120:
         raise ValueError("Index j must be between 1 and 120.")
     
     # Select column j (adjusting for 0-based indexing)
-    yield_series = data.iloc[:, j-1]
+    yield_series = pd.to_numeric(df.iloc[:, j-1], errors="coerce")
     
     # Compute and return the mean
     return yield_series.mean()
-
-def _ols_lstsq(X, y):
-    """
-    OLS via least squares: returns beta (k,)
-    X: (n,k), y: (n,)
-    Negeert NaNs (in zowel X als y).
-    """
-    # Mask NaNs
-    mask = np.isfinite(y)
-    if mask.sum() < X.shape[1]:
-        raise ValueError("Te weinig niet-NaN observaties voor OLS.")
-    Xm = X[mask, :]
-    ym = y[mask]
-    beta, *_ = np.linalg.lstsq(Xm, ym, rcond=None)
-    return beta
 
 
 def _fit_ar1_and_forecast(x, h):
@@ -120,7 +103,9 @@ def  getNelsonSiegelForecast(i, h, j):
 
     for t in range(i):
         y_t = Y[t, :]
-        beta_t = _ols_lstsq(X, y_t)  # (3,)
+        model = LinearRegression(fit_intercept=False)
+        model.fit(X, y_t)
+        beta_t = model.coef_
         betas[t, :] = beta_t
 
     # ---------- AR(1) per beta-reeks + h-step forecast ----------
@@ -136,5 +121,3 @@ def  getNelsonSiegelForecast(i, h, j):
 
     y_fore_j = beta1_fore + beta2_fore * f2_j + beta3_fore * f3_j
     return float(y_fore_j)
-
-print(getNelsonSiegelForecast(17,4,5))
